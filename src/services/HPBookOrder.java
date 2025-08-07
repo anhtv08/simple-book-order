@@ -222,7 +222,7 @@ public class HPBookOrder {
 
 
     public static void main(String[] args) {
-        TradingEngineImpl tradingEngine = new TradingEngineImpl();
+        TradingEngineImpl tradingEngine = new TradingEngineImpl( "USDSGD");
         Order order_1 = new Order(
                 UUID.randomUUID().toString(),
                 "USDSGD",

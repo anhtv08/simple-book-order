@@ -16,6 +16,7 @@ public class TradingEngineImpl implements TradingEngine{
     // using tree map with revere oder to maintain the buy order
     // higher price going first
 
+    private final String symbol;
     TreeMap<Double, Queue<Order>> buyOrders = new TreeMap<>(Collections.reverseOrder());
 
     // using tree for selling orders
@@ -28,7 +29,8 @@ public class TradingEngineImpl implements TradingEngine{
 
     List<Trade> trades = new ArrayList<>();
 
-    public TradingEngineImpl() {
+    public TradingEngineImpl(final String symbol) {
+        this.symbol = symbol;
     }
 
     @Override
@@ -237,8 +239,37 @@ public class TradingEngineImpl implements TradingEngine{
         return sellOrders.size();
     }
 
+    // Display order book state
+    public void printOrderBook(int levels) {
+        System.out.println("=== Order Book for " + symbol + " ===");
+
+        // Print sell orders (asks) - highest to lowest
+        List<Double> askPrices = new ArrayList<>(sellOrders.keySet());
+        Collections.reverse(askPrices);
+
+        for (int i = 0; i < Math.min(levels, askPrices.size()); i++) {
+            Double price = askPrices.get(i);
+            long totalQty = sellOrders.get(price).stream()
+                    .mapToLong(Order::getRemaningQuality).sum();
+            System.out.printf("ASK: %.4f x %d%n", price, totalQty);
+        }
+
+        System.out.println("----------");
+
+        // Print buy orders (bids) - highest to lowest
+        for (Double price : buyOrders.keySet()) {
+            long totalQty = buyOrders.get(price).stream()
+                    .mapToLong(Order::getRemaningQuality).sum();
+            System.out.printf("BID: %.4f x %d%n", price, totalQty);
+            if (--levels <= 0) break;
+        }
+
+        System.out.println("=========================");
+    }
+
+
     public static void main(String[] args) {
-        TradingEngineImpl tradingEngine = new TradingEngineImpl();
+        TradingEngineImpl tradingEngine = new TradingEngineImpl("USDSGD");
         Order order_1 = new Order(
              UUID.randomUUID().toString(),
                 "USDSGD",
