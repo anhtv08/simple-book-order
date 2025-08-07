@@ -5,42 +5,38 @@ import model.Trade;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
-/**
- *  simple order books for single symbol
- *   to extend to support multiple asset class or symbol such as amazon/apple/google
- */
-public class TradingEngineImpl implements TradingEngine{
-
+public class HPBookOrder {
 
     // using tree map with revere oder to maintain the buy order
     // higher price going first
 
-    TreeMap<Double, Queue<Order>> buyOrders = new TreeMap<>(Collections.reverseOrder());
+    ConcurrentSkipListMap<Double, Queue<Order>> buyOrders = new ConcurrentSkipListMap<>(Collections.reverseOrder());
 
     // using tree for selling orders
     // Order with the lowest price with got higher priority
-    TreeMap<Double, Queue<Order>> sellOrders = new TreeMap<>();
+    ConcurrentSkipListMap<Double, Queue<Order>> sellOrders = new ConcurrentSkipListMap<>();
 
     // all trades
 
     Map<String, Order> allOrders = new ConcurrentHashMap<>();
 
-    List<Trade> trades = new ArrayList<>();
+    List<Trade> trades = new CopyOnWriteArrayList<>();
 
-    public TradingEngineImpl() {
+    public HPBookOrder() {
     }
 
-    @Override
     public List<Trade> addOrder(Order order) {
         List<Trade> executedTrade = new ArrayList<>();
         switch (order.getOrderStrategy()){
 
             case MARKET:
-                 executedTrade.addAll(
-                         executeMarketOrder(order)
-                 );
-                 break;
+                executedTrade.addAll(
+                        executeMarketOrder(order)
+                );
+                break;
 
             case LIMIT_ORDER:
                 executedTrade.addAll(
@@ -55,12 +51,11 @@ public class TradingEngineImpl implements TradingEngine{
 
     }
 
-    @Override
     public void addOrdertoBook(Order order) {
-        TreeMap <Double, Queue<Order>> books = order.getOrderType() == Order.OrderType.BUY ? buyOrders : sellOrders;
+        ConcurrentSkipListMap <Double, Queue<Order>> books = order.getOrderType() == Order.OrderType.BUY ? buyOrders : sellOrders;
 
         books.computeIfAbsent( order.getPrice(), k -> new LinkedList<>())
-                        .offer(order);
+                .offer(order);
 
         allOrders.put( order.getOrderId(), order);
 
@@ -69,7 +64,7 @@ public class TradingEngineImpl implements TradingEngine{
     private Collection<? extends Trade> executeMarketOrder(Order marketOrder) {
 
         List<Trade> executions = new ArrayList<>();
-        TreeMap<Double, Queue<Order>> oppositeOrderBook  = marketOrder.getOrderType() == Order.OrderType.BUY? sellOrders: buyOrders;
+        ConcurrentSkipListMap<Double, Queue<Order>> oppositeOrderBook  = marketOrder.getOrderType() == Order.OrderType.BUY? sellOrders: buyOrders;
 
         long remainingQ = marketOrder.getRemaningQuality();
 
@@ -103,7 +98,7 @@ public class TradingEngineImpl implements TradingEngine{
                 allOrders.remove(restingOrder.getOrderId());
 
                 if(ordersAtBestPrice.isEmpty()){
-                      oppositeOrderBook.remove(bestOppPrice);
+                    oppositeOrderBook.remove(bestOppPrice);
                 }
             }
 
@@ -150,7 +145,7 @@ public class TradingEngineImpl implements TradingEngine{
 
 
         List<Trade> executions = new ArrayList<>();
-        TreeMap<Double, Queue<Order>> oppositeOrderBook  = limitOrder.getOrderType() == Order.OrderType.BUY? sellOrders: buyOrders;
+        ConcurrentSkipListMap<Double, Queue<Order>> oppositeOrderBook  = limitOrder.getOrderType() == Order.OrderType.BUY? sellOrders: buyOrders;
 
         long remainingQ = limitOrder.getRemaningQuality();
         double limitPrice = limitOrder.getPrice();
@@ -165,60 +160,48 @@ public class TradingEngineImpl implements TradingEngine{
                 break;
             }
 
-             Queue<Order> ordersAtBestPrice = oppositeOrderBook.get(bestOppPrice);
+            Queue<Order> ordersAtBestPrice = oppositeOrderBook.get(bestOppPrice);
 
-             Order restingOrder =  ordersAtBestPrice.peek();
-             if(restingOrder ==null){
-                 oppositeOrderBook.remove(bestOppPrice);
-                 continue;
-             }
+            Order restingOrder =  ordersAtBestPrice.peek();
+            if(restingOrder ==null){
+                oppositeOrderBook.remove(bestOppPrice);
+                continue;
+            }
 
-             long tradeQ = Math.min(remainingQ, restingOrder.getRemaningQuality());
-             Trade trade = createTrade(
-                     limitOrder,
-                     restingOrder,
-                     bestOppPrice,
-                     tradeQ
-             );
+            long tradeQ = Math.min(remainingQ, restingOrder.getRemaningQuality());
+            Trade trade = createTrade(
+                    limitOrder,
+                    restingOrder,
+                    bestOppPrice,
+                    tradeQ
+            );
 
-             executions.add(trade);
-             // update the quantity:
-             limitOrder.reduceQuantity(tradeQ);
-             restingOrder.reduceQuantity(tradeQ);
-             remainingQ -= tradeQ;
+            executions.add(trade);
+            // update the quantity:
+            limitOrder.reduceQuantity(tradeQ);
+            restingOrder.reduceQuantity(tradeQ);
+            remainingQ -= tradeQ;
 
-             // Remove fully executed order
-             if(restingOrder.isOrderFilled()){
-                 ordersAtBestPrice.poll();
-                 allOrders.remove(restingOrder.getOrderId());
+            // Remove fully executed order
+            if(restingOrder.isOrderFilled()){
+                ordersAtBestPrice.poll();
+                allOrders.remove(restingOrder.getOrderId());
 
-                 if(ordersAtBestPrice.isEmpty()){
-                     oppositeOrderBook.remove(bestOppPrice);
-                 }
-             }
+                if(ordersAtBestPrice.isEmpty()){
+                    oppositeOrderBook.remove(bestOppPrice);
+                }
+            }
         }
 
         return executions;
     }
 
-    @Override
     public  boolean cancelOrder(Order order) {
-         Order ord = allOrders.remove(order.getOrderId());
-
-        if (ord ==null) return false;
-        TreeMap<Double, Queue<Order>> book = order.getOrderType() == Order.OrderType.BUY? buyOrders: sellOrders;
-        Queue<Order>  ordersAtPrice = book.get(order.getPrice());
-        if(ordersAtPrice !=null){
-            ordersAtPrice.remove(order);
-            if(ordersAtPrice.isEmpty()){
-                 book.remove(order.getPrice());
-            }
-        }
-        return  true;
+        Order ord = allOrders.remove(order.getOrderId());
+        return ord != null;
 
     }
 
-    @Override
     public  List<Trade>  amendOrder(Order order) {
         return null;
     }
@@ -237,10 +220,11 @@ public class TradingEngineImpl implements TradingEngine{
         return sellOrders.size();
     }
 
+
     public static void main(String[] args) {
         TradingEngineImpl tradingEngine = new TradingEngineImpl();
         Order order_1 = new Order(
-             UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
                 "USDSGD",
                 Order.OrderStatus.NEW,
                 Order.OrderStrategy.MARKET,

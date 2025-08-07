@@ -1,19 +1,26 @@
 package model;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 public class Order {
 
     String orderId;
     String ticker;
     OrderStatus orderStatus;
     OrderStrategy orderStrategy;
-    int orginalQuality;
-    int remaningQuality;
+    long orginalQuality;
+    long remaningQuality;
     double price;
     OrderType orderType;
     long timestamp;
 
-    public void reduceQuantity(long executedQuanitty){
-         this.remaningQuality -= executedQuanitty;
+    public synchronized  boolean reduceQuantity(long executedQuanitty){
+         if(remaningQuality >= executedQuanitty){
+             this.remaningQuality -= executedQuanitty;
+             return  true;
+
+         }
+         return false;
     }
     public boolean isOrderFilled (){
         return remaningQuality <=0;
@@ -62,7 +69,7 @@ public class Order {
         this.orderStrategy = orderStrategy;
     }
 
-    public int getOrginalQuality() {
+    public long getOrginalQuality() {
         return orginalQuality;
     }
 
@@ -70,7 +77,7 @@ public class Order {
         this.orginalQuality = orginalQuality;
     }
 
-    public int getRemaningQuality() {
+    public long getRemaningQuality() {
         return remaningQuality;
     }
 
